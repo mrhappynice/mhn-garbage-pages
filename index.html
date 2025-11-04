@@ -1,0 +1,361 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>MHN Garbage Pages</title>
+  <meta name="color-scheme" content="dark light">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&display=swap" rel="stylesheet">
+
+  <style>
+    :root {
+      /* Core palette */
+      --bg: #0b0e14;
+      --panel: #0f1420;
+      --text: #e7ecf3;
+      --muted: #a8b3c7;
+      --muted-2: #7f8aa3;
+
+      /* Accents */
+      --accent: #7dd3fc;     /* sky */
+      --accent-2: #a78bfa;   /* violet */
+      --glow: 120, 200, 255; /* rgb for shadows */
+
+      /* Card radii & shadows */
+      --radius: 16px;
+      --inner-radius: 12px;
+      --shadow-lg: 0 30px 50px rgba(0, 0, 0, .45);
+      --shadow-sm: 0 6px 18px rgba(0, 0, 0, .35);
+
+      /* Layout */
+      --maxw: 1200px;
+      --gap: 1.2rem;
+    }
+
+    @media (prefers-color-scheme: light) {
+      :root {
+        --bg: #f6f8fb;
+        --panel: #ffffff;
+        --text: #0b0e14;
+        --muted: #475569;
+        --muted-2: #64748b;
+        --shadow-lg: 0 20px 40px rgba(2, 6, 23, .12);
+        --shadow-sm: 0 6px 18px rgba(2, 6, 23, .08);
+      }
+    }
+
+    * { box-sizing: border-box; }
+    html, body { height: 100%; }
+
+    body {
+      margin: 0;
+      font-family: "Inter", system-ui, -apple-system, Segoe UI, Roboto, "Helvetica Neue", Arial, "Noto Sans", "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol";
+      color: var(--text);
+      background: radial-gradient(1200px 700px at 10% -10%, rgba(124, 58, 237, .14), transparent 60%),
+                  radial-gradient(900px 600px at 110% 10%, rgba(14, 165, 233, .13), transparent 60%),
+                  var(--bg);
+      line-height: 1.5;
+    }
+
+    /* Soft grain for texture */
+    body::before {
+      content: "";
+      position: fixed; inset: 0;
+      background-image:
+        radial-gradient(rgba(255,255,255,.06) 1px, transparent 1px),
+        radial-gradient(rgba(255,255,255,.04) 1px, transparent 1px);
+      background-size: 3px 3px, 7px 7px;
+      background-position: 0 0, 10px 10px;
+      pointer-events: none;
+      mix-blend-mode: overlay;
+      opacity: .35;
+    }
+
+    header {
+      max-width: var(--maxw);
+      margin: 40px auto 18px;
+      padding: 0 20px;
+    }
+
+    .title {
+      display: flex; align-items: center; gap: .8rem;
+      font-weight: 800; letter-spacing: .4px; font-size: clamp(1.6rem, 2.5vw, 2.2rem);
+    }
+    .title .pill {
+      font-weight: 600;
+      font-size: .8rem;
+      padding: .35rem .6rem;
+      border-radius: 999px;
+      color: #081018;
+      background: linear-gradient(135deg, #7dd3fc, #a78bfa);
+      box-shadow: 0 0 0 1px rgba(255,255,255,.12) inset, 0 6px 14px rgba(124,58,237,.35);
+    }
+
+    .subtitle {
+      margin-top: 8px;
+      color: var(--muted);
+      max-width: 70ch;
+    }
+
+    .toolbar {
+      margin-top: 16px;
+      display: flex; align-items: center; gap: .6rem;
+    }
+    .btn {
+      appearance: none; border: 0; cursor: pointer;
+      padding: .6rem .9rem; border-radius: 10px;
+      background: linear-gradient(180deg, rgba(255,255,255,.06), rgba(255,255,255,.02));
+      color: var(--text);
+      box-shadow: var(--shadow-sm), 0 0 0 1px rgba(255,255,255,.06) inset;
+      transition: transform .15s ease, box-shadow .2s ease, background .2s ease;
+      font-weight: 600;
+    }
+    .btn:hover { transform: translateY(-1px); }
+    .btn:active { transform: translateY(0); }
+    .btn:focus-visible {
+      outline: 2px solid rgba(var(--glow), .9);
+      outline-offset: 2px;
+    }
+
+    main {
+      max-width: var(--maxw);
+      margin: 20px auto 80px;
+      padding: 0 20px;
+    }
+
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(12, 1fr);
+      gap: var(--gap);
+    }
+
+    /* Card as a link */
+    .card {
+      grid-column: span 12;
+      display: grid;
+      grid-template-rows: auto 1fr;
+      border-radius: var(--radius);
+      text-decoration: none;
+      color: inherit;
+      background:
+        linear-gradient(180deg, rgba(255,255,255,.06), rgba(255,255,255,.02));
+      box-shadow: var(--shadow-lg), 0 0 0 1px rgba(255,255,255,.06) inset;
+      position: relative; overflow: clip;
+      transition: transform .35s cubic-bezier(.2,.8,.2,1), box-shadow .35s ease, background .35s ease, filter .35s ease;
+      will-change: transform, box-shadow, filter;
+      perspective: 1000px;
+      isolation: isolate;
+    }
+    .card:hover {
+      transform: translateY(-6px) scale(1.01);
+      box-shadow: 0 40px 80px rgba(0,0,0,.55), 0 0 0 1px rgba(125, 211, 252, .25);
+      background:
+        linear-gradient(180deg, rgba(125,211,252,.10), rgba(167,139,250,.06));
+      filter: saturate(1.05);
+    }
+    .card:focus-visible {
+      outline: 2px solid rgba(var(--glow), .85);
+      outline-offset: 4px;
+    }
+
+    .thumb {
+      position: relative;
+      aspect-ratio: 16 / 9;
+      background: #0a101a;
+      overflow: hidden;
+      border-top-left-radius: var(--radius);
+      border-top-right-radius: var(--radius);
+    }
+    .thumb img {
+      width: 100%; height: 100%; object-fit: cover; display: block;
+      filter: saturate(1.05) contrast(1.02);
+      transition: transform .5s ease;
+    }
+    .card:hover .thumb img { transform: scale(1.05); }
+
+    /* Glow line */
+    .thumb::after {
+      content: "";
+      position: absolute; inset: auto 0 0 0; height: 2px;
+      background: linear-gradient(90deg, rgba(125,211,252, .0), rgba(125,211,252, .9), rgba(167,139,250, .9), rgba(167,139,250, .0));
+      filter: blur(.5px);
+      opacity: .85;
+    }
+
+    .content {
+      display: grid; gap: .6rem;
+      padding: 1rem 1rem 1.1rem;
+    }
+    .meta {
+      display: flex; align-items: center; gap: .5rem; flex-wrap: wrap;
+      color: var(--muted-2); font-size: .85rem;
+    }
+    .badge {
+      padding: .18rem .5rem;
+      border-radius: 999px;
+      font-size: .75rem; font-weight: 700; letter-spacing: .2px;
+      color: #081018;
+      background: linear-gradient(135deg, #7dd3fc, #a78bfa);
+    }
+    .title-row {
+      display: flex; gap: .6rem; align-items: center; justify-content: space-between;
+    }
+    h3 {
+      margin: 0;
+      font-size: 1.15rem; line-height: 1.25; letter-spacing: .2px;
+    }
+    .desc {
+      margin: 0; color: var(--muted);
+    }
+
+    /* Grid breakpoints */
+    @media (min-width: 540px) {
+      .card { grid-column: span 6; }
+    }
+    @media (min-width: 900px) {
+      .card { grid-column: span 4; }
+    }
+
+    /* Reduced motion respect */
+    @media (prefers-reduced-motion: reduce) {
+      .card, .thumb img, .btn { transition: none !important; }
+    }
+
+    /* Tiny footer */
+    footer {
+      max-width: var(--maxw);
+      margin: 32px auto 60px;
+      padding: 0 20px;
+      color: var(--muted-2);
+      font-size: .85rem;
+    }
+    .credit a { color: var(--text); text-decoration-color: rgba(125,211,252,.6); }
+  </style>
+</head>
+<body>
+  <header>
+    <div class="title">
+      Garbage Pages
+      <span class="pill">MHN</span>
+    </div>
+    <p class="subtitle">Not art, not fun. Just garbage.</p>
+
+    <div class="toolbar">
+      <button class="btn" id="shuffleBtn" aria-label="Shuffle cards">Shuffle</button>
+      <button class="btn" id="sortBtn" aria-label="Sort A–Z">Sort A–Z</button>
+    </div>
+  </header>
+
+  <main>
+    <section class="grid" id="grid" aria-label="List of websites">
+      <!-- Card 1 -->
+      <a class="card" href="much-sea-page.html" target="_blank" rel="noopener noreferrer"
+         aria-label="Open MDN Web Docs">
+        <div class="thumb">
+          <img src="squidboi.jpg"
+               alt="Abstract code on a screen" loading="lazy" />
+        </div>
+        <div class="content">
+          <div class="title-row">
+            <h3>Much Sea Creatures?</h3>
+            <span class="badge">Visuals</span>
+          </div>
+          <p class="desc">Swirling Squidy Boi?</p>
+          <div class="meta">
+            <span></span> •
+            <span>control panel</span>
+          </div>
+        </div>
+      </a>
+
+      <!-- Card 2 -->
+      <a class="card" href="i-cant-look-away.html" target="_blank" rel="noopener noreferrer"
+         aria-label="">
+        <div class="thumb">
+          <img src="icla.jpg"
+               alt="Moody neon lights in a tunnel" loading="lazy" />
+        </div>
+        <div class="content">
+          <div class="title-row">
+            <h3>I Can't Look Away</h3>
+            <span class="badge">Visuals</span>
+          </div>
+          <p class="desc">Just staring... </p>
+          <div class="meta">
+            <span></span> •
+            <span>can't.. look.. away..</span>
+          </div>
+        </div>
+      </a>
+
+    </section>
+  </main>
+
+  <footer>
+    <div class="credit">
+      Built with ♥ — customize by editing the cards in the HTML. Tip: duplicate a <code>.card</code> and swap the <code>href</code>, image, and text.
+    </div>
+  </footer>
+
+  <script>
+
+    const grid = document.getElementById('grid');
+    const shuffleBtn = document.getElementById('shuffleBtn');
+    const sortBtn = document.getElementById('sortBtn');
+
+    function shuffleCards() {
+      const cards = Array.from(grid.children);
+      for (let i = cards.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        grid.appendChild(cards[j]);
+        cards.splice(j, 1);
+      }
+    }
+
+    function sortCardsAZ() {
+      const cards = Array.from(grid.querySelectorAll('.card'));
+      cards.sort((a, b) => {
+        const ta = a.querySelector('h3')?.textContent.trim().toLowerCase() ?? '';
+        const tb = b.querySelector('h3')?.textContent.trim().toLowerCase() ?? '';
+        return ta.localeCompare(tb);
+      }).forEach(card => grid.appendChild(card));
+    }
+
+    shuffleBtn.addEventListener('click', shuffleCards);
+    sortBtn.addEventListener('click', sortCardsAZ);
+
+    const boundsMap = new WeakMap();
+    const tilt = (card, e) => {
+      const b = boundsMap.get(card) || card.getBoundingClientRect();
+      boundsMap.set(card, b);
+      const x = (e.clientX - b.left) / b.width - 0.5;
+      const y = (e.clientY - b.top) / b.height - 0.5;
+      card.style.transform = `translateY(-6px) scale(1.01) rotateX(${(-y*3).toFixed(2)}deg) rotateY(${(x*3).toFixed(2)}deg)`;
+    };
+
+    const resetTilt = (card) => {
+      card.style.transform = '';
+    };
+
+    const cards = document.querySelectorAll('.card');
+    cards.forEach(card => {
+      card.addEventListener('mousemove', (e) => tilt(card, e));
+      card.addEventListener('mouseleave', () => resetTilt(card));
+    });
+
+    const mediaQuery = window.matchMedia('(prefers-reduced-motion: reduce)');
+    function handleReducedMotion(e) {
+      if (e.matches) {
+        cards.forEach(c => {
+          c.style.transition = 'none';
+          c.removeEventListener('mousemove', tilt);
+          c.removeEventListener('mouseleave', resetTilt);
+        });
+      }
+    }
+    handleReducedMotion(mediaQuery);
+    mediaQuery.addEventListener('change', handleReducedMotion);
+  </script>
+</body>
+</html>

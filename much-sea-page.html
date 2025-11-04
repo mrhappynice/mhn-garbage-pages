@@ -1,0 +1,370 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>animated_pattern_3 — full-screen + draggable modal + zoom</title>
+<style>
+  :root { color-scheme: dark; }
+  html, body {
+    margin: 0; height: 100%;
+    background: #0a0a0a; overflow: hidden;
+    font-family: Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif;
+  }
+  canvas { display: block; width: 100vw; height: 100vh; }
+
+  /* Fashionable dark modal (glass) */
+  .modal {
+    position: fixed; left: 24px; top: 24px; width: min(92vw, 360px);
+    background: rgba(16,16,16,0.72);
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+    border: 1px solid rgba(255,255,255,0.06);
+    border-radius: 14px; box-shadow: 0 10px 40px rgba(0,0,0,.45);
+    color: #eaeaea; user-select: none;
+  }
+  .modal header {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 12px 14px; cursor: grab;
+    border-bottom: 1px solid rgba(255,255,255,0.06);
+  }
+  .modal header:active { cursor: grabbing; }
+  .modal h1 {
+    font: 600 14px/1.2 ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial;
+    margin: 0; letter-spacing: .2px;
+  }
+  .modal .body { padding: 12px 14px 10px 14px; display: grid; gap: 12px; }
+  .row { display: grid; gap: 6px; }
+  .row label { font-size: 12px; color: #cfcfcf; display: flex; justify-content: space-between; align-items: center; }
+  .row input[type="range"] { width: 100%; }
+  .btns { display: flex; gap: 8px; }
+  button {
+    background: #1b1b1b; color: #f3f3f3;
+    border: 1px solid #2a2a2a; padding: 8px 10px;
+    border-radius: 10px; cursor: pointer; font-size: 13px;
+  }
+  button:hover { background: #222; }
+  .meta { font-size: 12px; color: #b9b9b9; opacity: .95; display: flex; gap: 12px; flex-wrap: wrap; }
+  .pill {
+    display: inline-flex; align-items: center; gap: 6px;
+    background: rgba(255,255,255,0.06);
+    padding: 6px 8px; border-radius: 999px; font-size: 12px;
+    border: 1px solid rgba(255,255,255,0.08);
+  }
+  .kbd {
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    font-size: 11px; padding: 2px 6px; border-radius: 6px;
+    background: rgba(255,255,255,0.07); border: 1px solid rgba(255,255,255,0.12);
+  }
+  .row .right {
+    display: inline-flex; align-items: center; gap: 8px;
+  }
+  input[type="checkbox"] { transform: translateY(1px); }
+</style>
+</head>
+<body>
+<canvas id="c" aria-label="animated pattern"></canvas>
+
+<div class="modal" id="modal">
+  <header id="dragHandle">
+    <h1>animated_pattern_3</h1>
+    <span class="pill">dark&nbsp;mode</span>
+  </header>
+  <div class="body">
+    <div class="meta">
+      <span id="fps">fps: --</span>
+      <span id="pts">points: --</span>
+      <span id="spd">speed: 1.00</span>
+      <span id="zoomStat">zoom: 1.00×</span>
+    </div>
+
+    <div class="row">
+      <label>Speed <span class="kbd" id="speedVal">1.00</span></label>
+      <input id="speed" type="range" min="0.05" max="5" step="0.01" value="1.00" />
+    </div>
+
+    <div class="row">
+      <label>Density <span class="kbd" id="densVal">0.020</span></label>
+      <input id="density" type="range" min="0.005" max="0.060" step="0.001" value="0.020" />
+    </div>
+
+    <!-- NEW: Zoom controls -->
+    <div class="row">
+      <label>Zoom <span class="kbd" id="zoomVal">1.00×</span></label>
+      <input id="zoom" type="range" min="0.5" max="4" step="0.01" value="1.00" />
+    </div>
+    <div class="row">
+      <label class="right">
+        <input id="zoomAuto" type="checkbox" />
+        Auto-zoom pulse
+      </label>
+    </div>
+
+    <div class="btns">
+      <button id="toggle">Pause</button>
+      <button id="reset">Reset</button>
+    </div>
+
+    <div class="meta" style="opacity:.8">
+      <span>Wheel: speed</span>
+      <span>Shift + Wheel: zoom</span>
+      <span>Keys: <span class="kbd">+</span> / <span class="kbd">−</span> to zoom</span>
+      <span>Drag header to move</span>
+    </div>
+  </div>
+</div>
+
+<script>
+(() => {
+  // ===== Canvas & DPI =====
+  const canvas = document.getElementById('c');
+  const ctx = canvas.getContext('2d', { alpha: true });
+
+  let W = 0, H = 0, DPR = 1;
+  function fitCanvas() {
+    DPR = Math.max(1, Math.min(3, window.devicePixelRatio || 1));
+    W = Math.floor(window.innerWidth);
+    H = Math.floor(window.innerHeight);
+    canvas.width  = Math.floor(W * DPR);
+    canvas.height = Math.floor(H * DPR);
+    ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+    rebuildPointField();
+  }
+  window.addEventListener('resize', fitCanvas);
+
+  // ===== Controls / Modal (draggable) =====
+  const modal = document.getElementById('modal');
+  const handle = document.getElementById('dragHandle');
+  let dragging = false, ox = 0, oy = 0;
+
+  handle.addEventListener('pointerdown', (e) => {
+    dragging = true;
+    const r = modal.getBoundingClientRect();
+    ox = e.clientX - r.left; oy = e.clientY - r.top;
+    handle.setPointerCapture(e.pointerId);
+  });
+  handle.addEventListener('pointermove', (e) => {
+    if (!dragging) return;
+    const x = Math.max(8, Math.min(window.innerWidth - 80, e.clientX - ox));
+    const y = Math.max(8, Math.min(window.innerHeight - 80, e.clientY - oy));
+    modal.style.left = x + 'px';
+    modal.style.top  = y + 'px';
+  });
+  handle.addEventListener('pointerup', () => dragging = false);
+  handle.addEventListener('pointercancel', () => dragging = false);
+
+  // ===== Point field (precompute x,y like original) =====
+  let baseDensity = 0.020;  // pts per screen pixel (adjustable via UI)
+  const minPoints = 6000, maxPoints = 120000;
+  let N = 0, xVals, yVals;
+
+  function rebuildPointField() {
+    const target = Math.min(maxPoints, Math.max(minPoints, Math.floor(baseDensity * W * H)));
+    if (target === N) return;
+    N = target;
+    xVals = new Float32Array(N);
+    yVals = new Float32Array(N);
+    for (let i = 0; i < N; i++) {
+      const ii = i + 1;      // MATLAB 1-based
+      xVals[i] = ii % 200;   // mod(i,200)
+      yVals[i] = ii / 43;    // i/43
+    }
+    pts.textContent = 'points: ' + N.toLocaleString();
+  }
+
+  // ===== Animation state =====
+  let t = 0;                 // function-time
+  let speed = 1.0;
+  let running = true;
+  let last = performance.now();
+  let fpsEMA = 60;
+
+  // ===== Zoom state =====
+  let zoom = 1.00;           // manual zoom factor
+  let zoomAuto = false;      // auto pulse toggle
+  let zoomPhase = 0;         // time accumulator for auto pulse
+
+  // ===== UI wiring =====
+  const fpsEl = document.getElementById('fps');
+  const pts = document.getElementById('pts');
+  const spd = document.getElementById('spd');
+  const zoomStat = document.getElementById('zoomStat');
+
+  const speedRange = document.getElementById('speed');
+  const speedVal = document.getElementById('speedVal');
+  const densRange = document.getElementById('density');
+  const densVal = document.getElementById('densVal');
+  const btnToggle = document.getElementById('toggle');
+  const btnReset = document.getElementById('reset');
+
+  const zoomRange = document.getElementById('zoom');
+  const zoomVal   = document.getElementById('zoomVal');
+  const zoomAutoCb = document.getElementById('zoomAuto');
+
+  speedRange.addEventListener('input', () => {
+    speed = parseFloat(speedRange.value);
+    spd.textContent = 'speed: ' + speed.toFixed(2);
+    speedVal.textContent = speed.toFixed(2);
+  });
+  densRange.addEventListener('input', () => {
+    baseDensity = parseFloat(densRange.value);
+    densVal.textContent = baseDensity.toFixed(3);
+    rebuildPointField();
+  });
+  btnToggle.addEventListener('click', () => {
+    running = !running;
+    btnToggle.textContent = running ? 'Pause' : 'Resume';
+    if (running) requestAnimationFrame(loop);
+  });
+  btnReset.addEventListener('click', () => { t = 0; });
+
+  // Zoom UI
+  function updateZoomUI() {
+    zoomVal.textContent = zoom.toFixed(2) + '×';
+    zoomStat.textContent = 'zoom: ' + zoom.toFixed(2) + '×';
+  }
+  zoomRange.addEventListener('input', () => {
+    zoom = parseFloat(zoomRange.value);
+    updateZoomUI();
+  });
+  zoomAutoCb.addEventListener('change', () => {
+    zoomAuto = zoomAutoCb.checked;
+  });
+
+  // Wheel:
+  // - plain wheel adjusts speed (existing behavior)
+  // - Shift + wheel adjusts zoom
+  canvas.addEventListener('wheel', (ev) => {
+    if (ev.shiftKey) {
+      ev.preventDefault();
+      zoom *= Math.pow(1.1, -ev.deltaY / 100);
+      zoom = Math.min(4, Math.max(0.5, zoom));
+      zoomRange.value = zoom.toFixed(2);
+      updateZoomUI();
+      return;
+    }
+    // speed adjust
+    ev.preventDefault();
+    speed *= Math.pow(1.1, -ev.deltaY / 100);
+    speed = Math.max(0.05, Math.min(5, speed));
+    speedRange.value = speed.toFixed(2);
+    spd.textContent = 'speed: ' + speed.toFixed(2);
+    speedVal.textContent = speed.toFixed(2);
+  }, { passive: false });
+
+  // Keyboard +/- to zoom
+  window.addEventListener('keydown', (e) => {
+    if (e.key === '+' || e.key === '=') {
+      zoom = Math.min(4, zoom * 1.1);
+    } else if (e.key === '-' || e.key === '_') {
+      zoom = Math.max(0.5, zoom / 1.1);
+    } else {
+      return;
+    }
+    zoomRange.value = zoom.toFixed(2);
+    updateZoomUI();
+  });
+
+  // ===== Kickoff sizing & buffers =====
+  fitCanvas();
+  updateZoomUI();
+
+  // ===== Render loop (continuous + fit-to-screen transform + zoom) =====
+  function loop(now) {
+    if (!running) return;
+    const dt = Math.max(0.0001, (now - last) / 1000);
+    last = now;
+    // FPS meter (EMA)
+    const fps = 1 / dt; fpsEMA = fpsEMA * 0.9 + fps * 0.1;
+    fpsEl.textContent = 'fps: ' + fpsEMA.toFixed(0);
+
+    // Advance time ~ original step of +pi/20 per 60fps frame
+    const targetRate = Math.PI / 20 * 60; // rad/sec
+    t += targetRate * dt * speed;
+
+    // Auto-zoom pulse (gentle sine around current slider value)
+    let zoomNow = zoom;
+    if (zoomAuto) {
+      zoomPhase += dt;
+      const amp = 0.06;      // ±6%
+      const hz  = 0.08;      // cycles/sec
+      zoomNow = zoom * (1 + amp * Math.sin(2 * Math.PI * hz * zoomPhase));
+    }
+
+    // Pass 1: compute bounds in model space (mx,my)
+    let minX =  Infinity, maxX = -Infinity;
+    let minY =  Infinity, maxY = -Infinity;
+
+    for (let i = 0; i < N; i++) {
+      const xv = xVals[i];
+      const yv = yVals[i];
+
+      const k = 5 * Math.cos(xv / 14) * Math.cos(yv / 30);
+      const e = yv / 8 - 13;
+      const d = (k * k + e * e) / 59 + 4;
+
+      const q = 60 - 3 * Math.sin(Math.atan2(k, e) * e)
+              + k * (3 + (4 / d) * Math.sin(d * d - t * 2));
+
+      const c = d / 2 + e / 99 - t / 18;
+
+      const mx = q * Math.sin(c);
+      const my = (q + d * 9) * Math.cos(c);
+
+      if (mx < minX) minX = mx; if (mx > maxX) maxX = mx;
+      if (my < minY) minY = my; if (my > maxY) maxY = my;
+    }
+
+    // Fit-to-screen scale, then apply zoom (centered)
+    const bw = (maxX - minX) || 1;
+    const bh = (maxY - minY) || 1;
+    const margin = 0.92;
+    const baseScale = Math.min((W * margin) / bw, (H * margin) / bh);
+    const scale = baseScale * zoomNow;
+
+    // Center the (zoomed) bounds in the viewport
+    const cx = W * 0.5, cy = H * 0.5;
+    const midX = (minX + maxX) * 0.5;
+    const midY = (minY + maxY) * 0.5;
+    const offX = cx - (midX * scale);
+    const offY = cy - (midY * scale);
+
+    // Clear background
+    ctx.clearRect(0, 0, W, H);
+    ctx.fillStyle = '#0a0a0a';
+    ctx.fillRect(0, 0, W, H);
+
+    // Draw pass
+    ctx.fillStyle = 'rgba(255,255,255,0.376)';
+    for (let i = 0; i < N; i++) {
+      const xv = xVals[i];
+      const yv = yVals[i];
+
+      const k = 5 * Math.cos(xv / 14) * Math.cos(yv / 30);
+      const e = yv / 8 - 13;
+      const d = (k * k + e * e) / 59 + 4;
+
+      const q = 60 - 3 * Math.sin(Math.atan2(k, e) * e)
+              + k * (3 + (4 / d) * Math.sin(d * d - t * 2));
+
+      const c = d / 2 + e / 99 - t / 18;
+
+      const mx = q * Math.sin(c);
+      const my = (q + d * 9) * Math.cos(c);
+
+      const x = mx * scale + offX;
+      const y = my * scale + offY;
+
+      if (x >= 0 && x < W && y >= 0 && y < H) {
+        ctx.fillRect(x, y, 1, 1);
+      }
+    }
+
+    requestAnimationFrame(loop);
+  }
+
+  requestAnimationFrame(loop);
+})();
+</script>
+</body>
+</html>
