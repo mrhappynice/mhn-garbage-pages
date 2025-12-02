@@ -1,0 +1,285 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Canvas Text v3</title>
+  <style>
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: flex-start;
+      padding: 1.5rem;
+      gap: 1rem;
+      background: radial-gradient(circle at top, #333, #050505 60%);
+      color: #eee;
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+
+    h1 {
+      font-weight: 600;
+      font-size: 1.3rem;
+      margin: 0;
+      text-align: center;
+    }
+
+    .controls {
+      display: flex;
+      gap: 0.5rem;
+      width: 100%;
+      max-width: 640px;
+    }
+
+    .controls input[type="text"] {
+      flex: 1;
+      padding: 0.5rem 0.75rem;
+      border-radius: 999px;
+      border: 1px solid rgba(255, 255, 255, 0.2);
+      background: rgba(0, 0, 0, 0.45);
+      color: #eee;
+      font-size: 0.95rem;
+      outline: none;
+    }
+
+    .controls input[type="text"]::placeholder {
+      color: rgba(255, 255, 255, 0.4);
+    }
+
+    .controls button {
+      padding: 0.5rem 1rem;
+      border-radius: 999px;
+      border: none;
+      cursor: pointer;
+      font-size: 0.9rem;
+      font-weight: 500;
+      background: linear-gradient(135deg, #f5f5f5, #bbbbbb);
+      color: #111;
+      box-shadow: 0 0 20px rgba(0, 0, 0, 0.6);
+      white-space: nowrap;
+    }
+
+    #artContainer {
+      background: #000;
+      padding: 0.75rem;
+      border-radius: 16px;
+      box-shadow: 0 0 40px rgba(0, 0, 0, 0.8);
+      max-width: 90vw;
+      max-height: 70vh;
+      overflow: hidden;
+    }
+
+    #artContainer svg {
+      display: block;
+      max-width: 100%;
+      height: auto;
+    }
+
+    #hiddenCanvas {
+      display: none;
+    }
+
+    /* Subtle shimmer animation */
+    .sparkle-shape {
+      transform-origin: center;
+      animation: shimmer 1.6s ease-in-out infinite alternate;
+    }
+    /* this changes the wildness of the text line ends animation */
+    @keyframes shimmer {
+      0% {
+        transform: translate(0px, 0px) scale(1.025);
+        opacity: 0.7;
+      }
+      50% {
+        /* tiny jitter + small scale up */
+        transform: translate(0.01px, -0.01px) scale(1.03);
+        opacity: 1;
+      }
+      100% {
+        transform: translate(-0.01px, 0.01px) scale(1.025);
+        opacity: 0.78;
+      }
+    }
+  </style>
+</head>
+<body>
+  <h1>Canvas Text v3</h1>
+
+  <div class="controls">
+    <input
+      id="textInput"
+      type="text"
+      placeholder="Type something sparkly..."
+      value="Say hello to the sparkly text."
+    />
+    <button id="renderBtn">Render</button>
+  </div>
+
+  <div id="artContainer"></div>
+  <canvas id="hiddenCanvas"></canvas>
+
+  <script>
+    const artContainer = document.getElementById("artContainer");
+    const canvas = document.getElementById("hiddenCanvas");
+    const ctx = canvas.getContext("2d");
+    const textInput = document.getElementById("textInput");
+    const renderBtn = document.getElementById("renderBtn");
+
+    // Tweak these for different looks
+    const CELL_SIZE = 9;   // sample grid size
+    const FONT_SIZE = 140; // base font size for the rasterization
+
+    function renderSparkleText(text) {
+      text = text || "";
+      if (!text.trim()) {
+        artContainer.innerHTML = "";
+        return;
+      }
+
+      const padding = FONT_SIZE * 0.25;
+
+      ctx.font = `${FONT_SIZE}px monospace`;
+      const metrics = ctx.measureText(text);
+      const textWidth = metrics.width;
+      const textHeight = FONT_SIZE;
+
+      // Size canvas to fit the text
+      canvas.width = Math.ceil(textWidth + padding * 2);
+      canvas.height = Math.ceil(textHeight + padding * 2);
+
+      // Background
+      ctx.fillStyle = "black";
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+      // Draw text in white
+      ctx.fillStyle = "white";
+      ctx.font = `${FONT_SIZE}px monospace`;
+      ctx.textBaseline = "top";
+      ctx.fillText(text, padding, padding);
+
+      const imgData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+      const data = imgData.data;
+
+      const cols = Math.floor(canvas.width / CELL_SIZE);
+      const rows = Math.floor(canvas.height / CELL_SIZE);
+
+      const shapes = [];
+
+      for (let y = 0; y < rows; y++) {
+        for (let x = 0; x < cols; x++) {
+          const brightness = sampleCellBrightness(
+            data,
+            x,
+            y,
+            CELL_SIZE,
+            canvas.width,
+            canvas.height
+          );
+
+          const norm = brightness / 255;
+
+          // Skip dark cells
+          if (norm < 0.1) continue;
+
+          const cx = x * CELL_SIZE + CELL_SIZE / 2;
+          const cy = y * CELL_SIZE + CELL_SIZE / 2;
+
+          const shape = makeSparkleShape(norm, cx, cy, CELL_SIZE);
+          if (shape) shapes.push(shape);
+        }
+      }
+
+      const svgWidth = canvas.width;
+      const svgHeight = canvas.height;
+
+      const svg = `
+<svg xmlns="http://www.w3.org/2000/svg"
+     viewBox="0 0 ${svgWidth} ${svgHeight}"
+     width="${svgWidth}" height="${svgHeight}">
+  <rect width="100%" height="100%" fill="black" />
+  ${shapes.join("\n  ")}
+</svg>
+      `.trim();
+
+      artContainer.innerHTML = svg;
+    }
+
+    function sampleCellBrightness(data, cellX, cellY, cellSize, width, height) {
+      let sum = 0;
+      let count = 0;
+
+      const startX = cellX * cellSize;
+      const startY = cellY * cellSize;
+
+      for (let y = startY; y < startY + cellSize && y < height; y += 2) {
+        for (let x = startX; x < startX + cellSize && x < width; x += 2) {
+          const idx = (y * width + x) * 4;
+          const r = data[idx];
+          const g = data[idx + 1];
+          const b = data[idx + 2];
+          const brightness = 0.299 * r + 0.587 * g + 0.114 * b;
+          sum += brightness;
+          count++;
+        }
+      }
+
+      return count > 0 ? sum / count : 0;
+    }
+
+    function makeSparkleShape(norm, cx, cy, cellSize) {
+      // Base size from brightness
+      const baseSize = norm * cellSize;
+
+      // Slight randomness in size (kept small so it stays readable)
+      const jitter = (Math.random() - 0.5) * 0.15 * baseSize;
+      const size = Math.max(0.6, baseSize + jitter);
+
+      // Random timing so shapes shimmer out of sync
+      const delay = (Math.random() * 1.2).toFixed(2);
+      const duration = (1.4 + Math.random() * 0.8).toFixed(2);
+
+      if (Math.random() < 0.5) {
+        // circle
+        const r = size / 2;
+        return `<circle cx="${cx.toFixed(2)}" cy="${cy.toFixed(2)}" r="${r.toFixed(2)}"
+          fill="white"
+          class="sparkle-shape"
+          style="animation-delay:${delay}s;animation-duration:${duration}s;" />`;
+      } else {
+        // diamond
+        const half = size / 2;
+        const x = cx;
+        const y = cy;
+        const points = [
+          `${x.toFixed(2)},${(y - half).toFixed(2)}`,
+          `${(x + half).toFixed(2)},${y.toFixed(2)}`,
+          `${x.toFixed(2)},${(y + half).toFixed(2)}`,
+          `${(x - half).toFixed(2)},${y.toFixed(2)}`
+        ].join(" ");
+        return `<polygon points="${points}" fill="white"
+          class="sparkle-shape"
+          style="animation-delay:${delay}s;animation-duration:${duration}s;" />`;
+      }
+    }
+
+    // Hook up controls
+    renderBtn.addEventListener("click", () => {
+      renderSparkleText(textInput.value);
+    });
+
+    textInput.addEventListener("keyup", (e) => {
+      if (e.key === "Enter") {
+        renderSparkleText(textInput.value);
+      }
+    });
+
+    // Initial render
+    renderSparkleText(textInput.value);
+  </script>
+</body>
+</html>
