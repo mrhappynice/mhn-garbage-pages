@@ -1,3 +1,4 @@
-MHN Garbage Pages
+### MHN Garbage Pages   
 
-Not art, not fun. Just garbage.
+
+A place to put some garbage.
