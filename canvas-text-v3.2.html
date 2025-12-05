@@ -1,0 +1,405 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Canvas Text v3.1</title>
+  <style>
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center; /* Centered vertically now */
+      padding: 0;
+      /* CHANGE: Pure black background */
+      background: #000;
+      color: #eee;
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      overflow-x: hidden;
+    }
+
+    h1 {
+      position: absolute;
+      top: 1rem;
+      left: 1rem;
+      font-weight: 600;
+      font-size: 1rem;
+      margin: 0;
+      opacity: 0.3; /* Made very subtle */
+      pointer-events: none;
+    }
+
+    /* --- NEW MODAL STYLES --- */
+    #editBtn {
+      position: absolute;
+      top: 1rem;
+      right: 1rem;
+      z-index: 100;
+      padding: 0.5rem 1rem;
+      border-radius: 999px;
+      border: 1px solid rgba(255, 255, 255, 0.3);
+      background: rgba(0, 0, 0, 0.5);
+      color: #fff;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    #editBtn:hover {
+      background: rgba(255, 255, 255, 0.1);
+      border-color: #fff;
+    }
+
+    .modal-overlay {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100vw;
+      height: 100vh;
+      background: rgba(0, 0, 0, 0.85); /* Dark backdrop */
+      backdrop-filter: blur(5px);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.3s ease;
+      z-index: 999;
+    }
+    
+    .modal-overlay.open {
+      opacity: 1;
+      pointer-events: all;
+    }
+
+    .controls {
+      background: #1a1a1a;
+      padding: 2rem;
+      border-radius: 16px;
+      border: 1px solid #333;
+      display: flex;
+      flex-direction: column; /* Stacked vertically in modal */
+      gap: 1rem;
+      width: 90%;
+      max-width: 500px;
+      box-shadow: 0 10px 40px rgba(0,0,0,0.8);
+      transform: scale(0.9);
+      transition: transform 0.3s ease;
+    }
+
+    .modal-overlay.open .controls {
+      transform: scale(1);
+    }
+
+    .modal-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 0.5rem;
+    }
+
+    .close-modal {
+      cursor: pointer;
+      font-size: 1.5rem;
+      line-height: 1;
+      opacity: 0.6;
+    }
+    .close-modal:hover { opacity: 1; }
+
+    .controls input[type="text"] {
+      width: 100%;
+      padding: 0.75rem 1rem;
+      border-radius: 8px;
+      border: 1px solid rgba(255, 255, 255, 0.2);
+      background: rgba(0, 0, 0, 0.45);
+      color: #eee;
+      font-size: 1rem;
+      outline: none;
+      transition: border-color 0.2s;
+    }
+    .controls input[type="text"]:focus {
+      border-color: rgba(255, 255, 255, 0.6);
+    }
+
+    .controls button.action-btn {
+      width: 100%;
+      padding: 0.75rem 1rem;
+      border-radius: 8px;
+      border: none;
+      cursor: pointer;
+      font-size: 1rem;
+      font-weight: 600;
+      background: linear-gradient(135deg, #f5f5f5, #bbbbbb);
+      color: #111;
+      transition: transform 0.1s;
+    }
+    .controls button.action-btn:active {
+      transform: scale(0.98);
+    }
+
+    /* --- ART CONTAINER UPDATES --- */
+    #artContainer {
+      /* REMOVED: background, border, shadow to make it "float" */
+      width: 100%;
+      max-width: 100%;
+      padding: 1rem;
+      overflow: visible; 
+      min-height: 100px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    #artContainer svg {
+      display: block;
+      width: auto;
+      max-width: 100%;
+      height: auto;
+    }
+
+    #hiddenCanvas {
+      display: none;
+    }
+
+    /* ANIMATIONS */
+    .sparkle-shape {
+      transform-origin: center;
+      opacity: 0;
+      animation: 
+        ghost-enter 0.6s cubic-bezier(0.25, 0.46, 0.45, 0.94) forwards,
+        shimmer 2s ease-in-out infinite alternate;
+    }
+
+    @keyframes ghost-enter {
+      0% { opacity: 0; transform: scale(0); filter: blur(4px); }
+      60% { opacity: 1; filter: blur(0px); }
+      100% { opacity: 1; transform: scale(1); filter: blur(0px); }
+    }
+
+    @keyframes shimmer {
+      0% { transform: translate(0px, 0px) scale(1); opacity: 0.8; }
+      50% { transform: translate(0.1px, -0.1px) scale(1.01); opacity: 1; }
+      100% { transform: translate(-0.1px, 0.1px) scale(1); opacity: 0.85; }
+    }
+  </style>
+</head>
+<body>
+  <h1>Canvas Text v3.1</h1>
+  
+  <!-- Trigger Button -->
+  <button id="editBtn">Edit Text</button>
+
+  <!-- Modal Container -->
+  <div id="settingsModal" class="modal-overlay">
+    <div class="controls">
+      <div class="modal-header">
+        <span>Enter your message</span>
+        <span id="closeModalBtn" class="close-modal">&times;</span>
+      </div>
+      <input
+        id="textInput"
+        type="text"
+        placeholder="Type a long message..."
+        value="The quick brown fox jumped..."
+      />
+      <button id="renderBtn" class="action-btn">Render</button>
+    </div>
+  </div>
+
+  <div id="artContainer"></div>
+  <canvas id="hiddenCanvas"></canvas>
+
+  <script>
+    const artContainer = document.getElementById("artContainer");
+    const canvas = document.getElementById("hiddenCanvas");
+    const ctx = canvas.getContext("2d");
+    const textInput = document.getElementById("textInput");
+    const renderBtn = document.getElementById("renderBtn");
+
+    // Modal Elements
+    const settingsModal = document.getElementById("settingsModal");
+    const editBtn = document.getElementById("editBtn");
+    const closeModalBtn = document.getElementById("closeModalBtn");
+
+    const CELL_SIZE = 7;   
+    const FONT_SIZE = 100; 
+    const LINE_HEIGHT = FONT_SIZE * 1.1;
+
+    // --- Modal Logic ---
+    function openModal() {
+      settingsModal.classList.add("open");
+      textInput.focus();
+    }
+
+    function closeModal() {
+      settingsModal.classList.remove("open");
+    }
+
+    editBtn.addEventListener("click", openModal);
+    closeModalBtn.addEventListener("click", closeModal);
+    
+    // Close modal if clicking outside the white box
+    settingsModal.addEventListener("click", (e) => {
+      if (e.target === settingsModal) closeModal();
+    });
+
+    // --- Render Logic ---
+    function renderSparkleText(text) {
+      text = text || "";
+      if (!text.trim()) {
+        artContainer.innerHTML = "";
+        return;
+      }
+
+      const maxLineWidth = Math.min(window.innerWidth - 60, 850); 
+      
+      ctx.font = `bold ${FONT_SIZE}px monospace`;
+      ctx.textBaseline = "top";
+
+      const words = text.split(" ");
+      let lines = [];
+      let currentLine = words[0];
+
+      for (let i = 1; i < words.length; i++) {
+        let testLine = currentLine + " " + words[i];
+        let metrics = ctx.measureText(testLine);
+        if (metrics.width > maxLineWidth) {
+          lines.push(currentLine);
+          currentLine = words[i];
+        } else {
+          currentLine = testLine;
+        }
+      }
+      lines.push(currentLine);
+
+      const padding = 20;
+      let maxMeasuredWidth = 0;
+      lines.forEach(line => {
+        const w = ctx.measureText(line).width;
+        if(w > maxMeasuredWidth) maxMeasuredWidth = w;
+      });
+
+      canvas.width = Math.ceil(maxMeasuredWidth + padding * 2);
+      canvas.height = Math.ceil((lines.length * LINE_HEIGHT) + padding * 2);
+
+      ctx.fillStyle = "black";
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+      ctx.fillStyle = "white";
+      ctx.font = `bold ${FONT_SIZE}px monospace`;
+      ctx.textBaseline = "top";
+
+      lines.forEach((line, index) => {
+        ctx.fillText(line, padding, padding + (index * LINE_HEIGHT));
+      });
+
+      const imgData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+      const data = imgData.data;
+
+      const cols = Math.floor(canvas.width / CELL_SIZE);
+      const rows = Math.floor(canvas.height / CELL_SIZE);
+      const shapes = [];
+
+      for (let y = 0; y < rows; y++) {
+        for (let x = 0; x < cols; x++) {
+          const brightness = sampleCellBrightness(data, x, y, CELL_SIZE, canvas.width, canvas.height);
+          const norm = brightness / 255;
+
+          if (norm < 0.1) continue;
+
+          const cx = x * CELL_SIZE + CELL_SIZE / 2;
+          const cy = y * CELL_SIZE + CELL_SIZE / 2;
+
+          const typeDelay = (x * 0.015) + (y * 0); 
+
+          const shape = makeSparkleShape(norm, cx, cy, CELL_SIZE, typeDelay);
+          if (shape) shapes.push(shape);
+        }
+      }
+
+      // Output SVG - Note: background rect is black, which matches body
+      const svg = `
+        <svg xmlns="http://www.w3.org/2000/svg"
+             viewBox="0 0 ${canvas.width} ${canvas.height}"
+             width="${canvas.width}" height="${canvas.height}">
+          <rect width="100%" height="100%" fill="black" />
+          ${shapes.join("\n")}
+        </svg>
+      `.trim();
+
+      artContainer.innerHTML = svg;
+    }
+
+    function sampleCellBrightness(data, cellX, cellY, cellSize, width, height) {
+      let sum = 0;
+      let count = 0;
+      const startX = cellX * cellSize;
+      const startY = cellY * cellSize;
+
+      for (let y = startY; y < startY + cellSize && y < height; y += 2) {
+        for (let x = startX; x < startX + cellSize && x < width; x += 2) {
+          const idx = (y * width + x) * 4;
+          const bVal = (data[idx] + data[idx+1] + data[idx+2]) / 3;
+          sum += bVal;
+          count++;
+        }
+      }
+      return count > 0 ? sum / count : 0;
+    }
+
+    function makeSparkleShape(norm, cx, cy, cellSize, typeDelay) {
+      const baseSize = norm * cellSize;
+      const jitter = (Math.random() - 0.5) * 0.2 * baseSize;
+      const size = Math.max(0.6, baseSize + jitter);
+      const shimmerDelay = (Math.random() * 2).toFixed(2);
+      const totalStyle = `animation-delay: ${typeDelay.toFixed(2)}s, ${shimmerDelay}s;`;
+
+      if (Math.random() < 0.5) {
+        const r = size / 2;
+        return `<circle cx="${cx.toFixed(2)}" cy="${cy.toFixed(2)}" r="${r.toFixed(2)}"
+          fill="white"
+          class="sparkle-shape"
+          style="${totalStyle}" />`;
+      } else {
+        const half = size / 2;
+        const pts = [
+          `${cx},${cy - half}`,
+          `${cx + half},${cy}`,
+          `${cx},${cy + half}`,
+          `${cx - half},${cy}`
+        ].join(" ");
+        return `<polygon points="${pts}" fill="white"
+          class="sparkle-shape"
+          style="${totalStyle}" />`;
+      }
+    }
+
+    // Event Listeners for render actions
+    renderBtn.addEventListener("click", () => {
+      renderSparkleText(textInput.value);
+      closeModal(); // Close modal on render
+    });
+
+    textInput.addEventListener("keyup", (e) => {
+      if (e.key === "Enter") {
+        renderSparkleText(textInput.value);
+        closeModal(); // Close modal on Enter
+      }
+    });
+    
+    // Handle Window Resize
+    let resizeTimeout;
+    window.addEventListener("resize", () => {
+      clearTimeout(resizeTimeout);
+      resizeTimeout = setTimeout(() => {
+        renderSparkleText(textInput.value);
+      }, 300);
+    });
+
+    // Initial render
+    renderSparkleText(textInput.value);
+  </script>
+</body>
+</html>
